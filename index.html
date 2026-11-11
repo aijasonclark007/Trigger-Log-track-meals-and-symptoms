@@ -127,9 +127,8 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     <span class="demo-pill">Prototype</span>
     <label class="sr-only" for="region">Region</label>
     <select id="region" class="region-select" aria-label="Region">
+      <option value="uk" selected>United Kingdom</option>
       <option value="us">United States</option>
-      <option value="uk">United Kingdom</option>
-      <option value="eu">European Union</option>
     </select>
   </header>
 
@@ -229,6 +228,23 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     { key: "itch", label: "Itching or flushing" },
     { key: "headache", label: "Headache" }
   ];
+  var REGIONS = {
+    uk: {
+      foot: "If this is an emergency, call 999. For urgent advice call NHS 111, or contact your GP.",
+      flag: "call 999 now. For urgent advice call NHS 111, or contact your GP."
+    },
+    us: {
+      foot: "If this is an emergency, call 911. For a mental health crisis, call or text 988. For urgent medical advice, contact your doctor.",
+      flag: "call 911 now. For a mental health crisis, call or text 988, and contact your doctor."
+    }
+  };
+  function currentRegion() {
+    var sel = document.getElementById("region");
+    return sel && REGIONS[sel.value] ? sel.value : "uk";
+  }
+  function applyRegion() {
+    document.getElementById("emergency-foot").textContent = REGIONS[currentRegion()].foot;
+  }
   var RED_FLAGS = [
     "chest pain", "can't breathe", "cannot breathe", "trouble breathing",
     "blood in", "black stool", "swelling of face", "throat closing",
@@ -403,7 +419,7 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     var hit = RED_FLAGS.some(function (f) { return text.indexOf(f) !== -1; });
     if (hit) {
       flag.classList.remove("hidden");
-      flag.innerHTML = "<strong>Please get help now.</strong> You mentioned something that can need urgent care. If you have chest pain, trouble breathing, or feel faint or unwell, call 999 now. For urgent advice call NHS 111, or contact your GP. This check-in is still saved.";
+      flag.innerHTML = "<strong>Please get help now.</strong> You mentioned something that can need urgent care. If you have chest pain, trouble breathing, or feel faint or unwell, " + REGIONS[currentRegion()].flag + " This check-in is still saved.";
     } else {
       flag.classList.add("hidden");
       flag.innerHTML = "";
@@ -530,6 +546,8 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
   }
 
   // ---------- Init ----------
+  document.getElementById("region").addEventListener("change", applyRegion);
+  applyRegion();
   loadTodayIntoForm();
   renderStreak();
 })();
