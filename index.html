@@ -183,7 +183,9 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       <p id="account-email" style="margin:0 0 12px;font-weight:600;word-break:break-all"></p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <button class="btn ghost" id="btn-signout" type="button">Sign out</button>
+        <button class="btn ghost" id="btn-export" type="button">Download my data</button>
         <button class="btn ghost" id="btn-delete" type="button">Delete my data</button>
+        <button class="btn ghost" id="btn-delete-account" type="button" style="color:var(--alert)">Delete my account</button>
       </div>
     </section>
 
@@ -756,6 +758,51 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
 
   document.getElementById("btn-signout").addEventListener("click", function () {
     sb.auth.signOut();
+  });
+
+  document.getElementById("btn-export").addEventListener("click", async function () {
+    if (!currentUser) return;
+    var res = await sb.from("checkins")
+      .select("day, meals, note, symptoms, created_at, updated_at")
+      .eq("user_id", currentUser.id)
+      .order("day", { ascending: true });
+    var sn = document.getElementById("saved-note");
+    if (res.error) {
+      sn.textContent = "Could not prepare your data. Try again.";
+      sn.classList.remove("hidden");
+      return;
+    }
+    var payload = {
+      exported_at: new Date().toISOString(),
+      account_email: currentUser.email || "",
+      checkins: res.data
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "trigger-log-export-" + todayKey() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    sn.textContent = "Your data file is downloading.";
+    sn.classList.remove("hidden");
+  });
+
+  document.getElementById("btn-delete-account").addEventListener("click", async function () {
+    if (!currentUser) return;
+    if (!window.confirm("Permanently delete your account and all your check-ins? This cannot be undone. Download your data first if you want a copy.")) return;
+    var res = await sb.rpc("delete_my_account");
+    var sn = document.getElementById("saved-note");
+    if (res.error) {
+      sn.textContent = "Could not delete your account. Email us and we will do it for you.";
+      sn.classList.remove("hidden");
+      return;
+    }
+    await sb.auth.signOut({ scope: "local" });
+    leaveApp();
+    authMsg("Your account and check-ins have been deleted.", false);
   });
 
   document.getElementById("btn-delete").addEventListener("click", async function () {
