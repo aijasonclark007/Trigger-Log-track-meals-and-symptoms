@@ -69,6 +69,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .app { max-width: 480px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; padding: 0 0 92px; }
 header.top { padding: 22px 20px 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 header.top h1 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+.tagline { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+header.top > div { min-width: 0; }
 .demo-pill { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
 main { padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
@@ -124,7 +126,10 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
 <body>
 <div class="app">
   <header class="top">
-    <h1>Trigger Log</h1>
+    <div>
+      <h1>Trigger Log</h1>
+      <p class="tagline">Meals and symptoms, day by day.</p>
+    </div>
     <span class="demo-pill">Prototype</span>
     <label class="sr-only" for="region">Region</label>
     <select id="region" class="region-select" aria-label="Region">
@@ -135,6 +140,13 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
 
   <!-- TODAY -->
   <main id="view-today">
+    <section class="card" id="about-card" aria-labelledby="about-h">
+      <p class="eyebrow">What is Trigger Log?</p>
+      <h2 id="about-h">A daily diary for meals and symptoms</h2>
+      <p class="muted">Log what you eat and how you feel, about a minute a day. After two weeks, the Patterns tab shows which foods or times of day tend to come before your symptoms, so you can bring a clear record to your doctor or coach.</p>
+      <p class="fine" style="margin-top:8px">Trigger Log tracks your own log and shows patterns in it. It does not diagnose or treat any condition.</p>
+    </section>
+
     <section class="card hidden" id="auth-card">
       <p class="eyebrow">Guest mode</p>
       <h2>Keep your log safe</h2>
