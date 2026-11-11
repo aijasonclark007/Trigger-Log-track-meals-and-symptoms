@@ -139,6 +139,8 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       <p class="eyebrow">Guest mode</p>
       <h2>Keep your log safe</h2>
       <p class="muted">Your check-ins are stored only in this browser. Clearing browser data will delete them. Create an account or sign in to save them to your account and use them on another device. Any check-ins you've made here will move into your account.</p>
+      <button class="btn ghost" id="btn-google" type="button" style="margin-top:12px">Continue with Google</button>
+      <p class="fine" style="text-align:center;margin:12px 0 0">or use your email</p>
       <label class="field" for="auth-email">Email</label>
       <input id="auth-email" class="input" type="email" autocomplete="email">
       <label class="field" for="auth-pass">Password (at least 8 characters)</label>
@@ -668,6 +670,14 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     var res = await sb.auth.signUp({ email: email, password: pass });
     if (res.error) authMsg(res.error.message, true);
     else authMsg("Check your email for a confirmation link, then sign in here. Your guest check-ins will move into your account when you sign in.", false);
+  });
+
+  document.getElementById("btn-google").addEventListener("click", async function () {
+    var res = await sb.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin + window.location.pathname }
+    });
+    if (res.error) authMsg("Google sign-in could not start. Try again, or use your email.", true);
   });
 
   document.getElementById("btn-signout").addEventListener("click", function () {
