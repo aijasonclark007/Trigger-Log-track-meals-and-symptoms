@@ -118,15 +118,10 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
 .foot { font-size: 12px; color: var(--muted); padding: 4px 4px 0; }
 .foot a { color: var(--ink); }
 .input { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper); }
-body[data-auth="out"] #view-today,
-body[data-auth="out"] #view-timeline,
-body[data-auth="out"] #view-patterns,
-body[data-auth="out"] nav.tabs { display: none !important; }
-body:not([data-auth="out"]) #view-auth { display: none !important; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
-<body data-auth="out">
+<body>
 <div class="app">
   <header class="top">
     <h1>Trigger Log</h1>
@@ -138,12 +133,12 @@ body:not([data-auth="out"]) #view-auth { display: none !important; }
     </select>
   </header>
 
-  <!-- SIGN IN -->
-  <main id="view-auth">
-    <section class="card">
-      <p class="eyebrow">Your account</p>
-      <h2>Sign in to save your check-ins</h2>
-      <p class="muted">Your entries are saved to your account, so you can use another device. Only you can see them.</p>
+  <!-- TODAY -->
+  <main id="view-today">
+    <section class="card hidden" id="auth-card">
+      <p class="eyebrow">Guest mode</p>
+      <h2>Keep your log safe</h2>
+      <p class="muted">Your check-ins are stored only in this browser. Clearing browser data will delete them. Create an account or sign in to save them to your account and use them on another device. Any check-ins you've made here will move into your account.</p>
       <label class="field" for="auth-email">Email</label>
       <input id="auth-email" class="input" type="email" autocomplete="email">
       <label class="field" for="auth-pass">Password (at least 8 characters)</label>
@@ -154,11 +149,8 @@ body:not([data-auth="out"]) #view-auth { display: none !important; }
       </div>
       <p class="banner quiet hidden" id="auth-msg" role="status" style="margin-top:12px"></p>
     </section>
-  </main>
 
-  <!-- TODAY -->
-  <main id="view-today">
-    <section class="card" id="account-card">
+    <section class="card hidden" id="account-card">
       <p class="eyebrow">Signed in as</p>
       <p id="account-email" style="margin:0 0 12px;font-weight:600;word-break:break-all"></p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -319,12 +311,28 @@ body:not([data-auth="out"]) #view-auth { display: none !important; }
 
   var sb = null;
   var currentUser = null;
+  var guestMemory = null;
   function val(id) { return document.getElementById(id).value.trim(); }
   function authMsg(text, isError) {
     var m = document.getElementById("auth-msg");
     m.textContent = text;
     m.style.borderColor = isError ? "var(--alert)" : "var(--line)";
     m.classList.remove("hidden");
+  }
+  function localLoad() {
+    try {
+      var raw = window.localStorage.getItem(STORE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* storage unavailable: use memory */ }
+    return guestMemory || [];
+  }
+  function localSave(list) {
+    guestMemory = list;
+    try { window.localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
+  }
+  function localClear() {
+    guestMemory = null;
+    try { window.localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
   }
   async function loadEntries() {
     var from = dayKey(new Date(Date.now() - 120 * DAY_MS));
@@ -469,21 +477,26 @@ body:not([data-auth="out"]) #view-auth { display: none !important; }
     }
     var today = todayKey();
     var symptoms = JSON.parse(JSON.stringify(symState));
-    var res = await sb.from("checkins").upsert(
-      { user_id: currentUser.id, day: today, meals: meals, note: note, symptoms: symptoms },
-      { onConflict: "user_id,day" }
-    );
-    if (res.error) {
-      var sn = document.getElementById("saved-note");
-      sn.textContent = "Could not save this check-in. Check your connection and try again.";
-      sn.classList.remove("hidden");
-      return;
+    if (currentUser) {
+      var res = await sb.from("checkins").upsert(
+        { user_id: currentUser.id, day: today, meals: meals, note: note, symptoms: symptoms },
+        { onConflict: "user_id,day" }
+      );
+      if (res.error) {
+        var sn = document.getElementById("saved-note");
+        sn.textContent = "Could not save this check-in. Check your connection and try again.";
+        sn.classList.remove("hidden");
+        return;
+      }
     }
     var rest = entries.filter(function (e) { return e.date !== today; });
     rest.push({ date: today, meals: meals, note: note, symptoms: symptoms, example: false });
     rest.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
     entries = rest;
-    document.getElementById("saved-note").textContent = "Saved. See you tomorrow.";
+    if (!currentUser) localSave(entries.filter(function (e) { return !e.example; }));
+    document.getElementById("saved-note").textContent = currentUser
+      ? "Saved. See you tomorrow."
+      : "Saved in this browser. Sign in to keep it across devices.";
     renderStreak();
     document.getElementById("saved-note").classList.remove("hidden");
   });
@@ -517,6 +530,16 @@ body:not([data-auth="out"]) #view-auth { display: none !important; }
     }
     document.getElementById("example-note").innerHTML = anyExample ?
       "Showing example data. Your own check-ins replace it as you add them. <button type='button' id='clear-ex' class='btn ghost' style='margin-top:8px'>Clear example data</button>" : "";
+    var clr = document.getElementById("clear-ex");
+    if (clr) clr.addEventListener("click", function () {
+      entries = entries.filter(function (e) { return !e.example; });
+      localSave(entries);
+      loadTodayIntoForm();
+      renderStreak();
+      renderTimeline();
+      renderPatterns();
+    });
+
     var list = document.getElementById("entries");
     var recent = entries.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 14);
     if (!recent.length) {
@@ -581,6 +604,9 @@ body:not([data-auth="out"]) #view-auth { display: none !important; }
       });
     }
     html += "<p class='fine' style='margin-top:10px'>If symptoms are persistent or worrying, speak to your GP.</p>";
+    if (entries.some(function (e) { return e.example; })) {
+      html += "<p class='fine' style='margin-top:10px'>Based on example data. Clear it on the Timeline tab to see only your own log.</p>";
+    }
     card.innerHTML = html;
   }
   function escapeHtml(s) {
@@ -592,19 +618,36 @@ body:not([data-auth="out"]) #view-auth { display: none !important; }
   // ---------- Accounts ----------
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  function enterApp(user) {
+  async function enterApp(user) {
     currentUser = user;
-    document.body.removeAttribute("data-auth");
+    document.getElementById("auth-card").classList.add("hidden");
+    document.getElementById("account-card").classList.remove("hidden");
     document.getElementById("account-email").textContent = user.email || "";
-    loadEntries().then(function () {
-      loadTodayIntoForm();
-      renderStreak();
-    });
+    // Move guest check-ins into the account. Existing account rows win on a clash.
+    var guest = localLoad().filter(function (e) { return !e.example; });
+    if (guest.length) {
+      var rows = guest.map(function (e) {
+        return { user_id: user.id, day: e.date, meals: e.meals || "", note: e.note || "", symptoms: e.symptoms || {} };
+      });
+      var mig = await sb.from("checkins").upsert(rows, { onConflict: "user_id,day", ignoreDuplicates: true });
+      if (!mig.error) localClear();
+    }
+    await loadEntries();
+    loadTodayIntoForm();
+    renderStreak();
   }
+
   function leaveApp() {
     currentUser = null;
-    entries = [];
-    document.body.setAttribute("data-auth", "out");
+    document.getElementById("account-card").classList.add("hidden");
+    document.getElementById("auth-card").classList.remove("hidden");
+    entries = localLoad();
+    if (!entries.length) {
+      entries = exampleData();
+      localSave(entries);
+    }
+    loadTodayIntoForm();
+    renderStreak();
   }
 
   sb.auth.onAuthStateChange(function (event, session) {
@@ -624,7 +667,7 @@ body:not([data-auth="out"]) #view-auth { display: none !important; }
     if (!email || !pass) { authMsg("Enter your email and a password of at least 8 characters.", true); return; }
     var res = await sb.auth.signUp({ email: email, password: pass });
     if (res.error) authMsg(res.error.message, true);
-    else authMsg("Check your email for a confirmation link, then sign in here.", false);
+    else authMsg("Check your email for a confirmation link, then sign in here. Your guest check-ins will move into your account when you sign in.", false);
   });
 
   document.getElementById("btn-signout").addEventListener("click", function () {
