@@ -117,10 +117,16 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .foot { font-size: 12px; color: var(--muted); padding: 4px 4px 0; }
 .foot a { color: var(--ink); }
+.input { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper); }
+body[data-auth="out"] #view-today,
+body[data-auth="out"] #view-timeline,
+body[data-auth="out"] #view-patterns,
+body[data-auth="out"] nav.tabs { display: none !important; }
+body:not([data-auth="out"]) #view-auth { display: none !important; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
-<body>
+<body data-auth="out">
 <div class="app">
   <header class="top">
     <h1>Trigger Log</h1>
@@ -132,8 +138,35 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     </select>
   </header>
 
+  <!-- SIGN IN -->
+  <main id="view-auth">
+    <section class="card">
+      <p class="eyebrow">Your account</p>
+      <h2>Sign in to save your check-ins</h2>
+      <p class="muted">Your entries are saved to your account, so you can use another device. Only you can see them.</p>
+      <label class="field" for="auth-email">Email</label>
+      <input id="auth-email" class="input" type="email" autocomplete="email">
+      <label class="field" for="auth-pass">Password (at least 8 characters)</label>
+      <input id="auth-pass" class="input" type="password" autocomplete="current-password">
+      <div style="display:grid;gap:8px;margin-top:16px">
+        <button class="btn" id="btn-signin" type="button">Sign in</button>
+        <button class="btn ghost" id="btn-signup" type="button">Create account</button>
+      </div>
+      <p class="banner quiet hidden" id="auth-msg" role="status" style="margin-top:12px"></p>
+    </section>
+  </main>
+
   <!-- TODAY -->
   <main id="view-today">
+    <section class="card" id="account-card">
+      <p class="eyebrow">Signed in as</p>
+      <p id="account-email" style="margin:0 0 12px;font-weight:600;word-break:break-all"></p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn ghost" id="btn-signout" type="button">Sign out</button>
+        <button class="btn ghost" id="btn-delete" type="button">Delete my data</button>
+      </div>
+    </section>
+
     <section class="card" aria-labelledby="streak-h">
       <div class="streak">
         <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
@@ -217,9 +250,12 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
   </ul>
 </nav>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (function () {
   "use strict";
+  var SUPABASE_URL = "https://kjsmxburpajxvduuevrm.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_r-7SG0wqGFjCURjV_sW2RQ_EjGso8iM";
 
   var SYMPTOMS = [
     { key: "bloating", label: "Bloating" },
@@ -281,28 +317,35 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     return out;
   }
 
-  var memory = null;
-  function load() {
-    try {
-      var raw = window.localStorage.getItem(STORE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) { /* storage unavailable: fall back to memory */ }
-    if (memory) return memory;
-    memory = exampleData();
-    return memory;
+  var sb = null;
+  var currentUser = null;
+  function val(id) { return document.getElementById(id).value.trim(); }
+  function authMsg(text, isError) {
+    var m = document.getElementById("auth-msg");
+    m.textContent = text;
+    m.style.borderColor = isError ? "var(--alert)" : "var(--line)";
+    m.classList.remove("hidden");
   }
-  function save(entries) {
-    memory = entries;
-    try { window.localStorage.setItem(STORE_KEY, JSON.stringify(entries)); } catch (e) { /* ignore */ }
+  async function loadEntries() {
+    var from = dayKey(new Date(Date.now() - 120 * DAY_MS));
+    var res = await sb.from("checkins").select("day, meals, note, symptoms").gte("day", from).order("day", { ascending: true });
+    if (res.error) {
+      document.getElementById("saved-note").textContent = "Could not load your check-ins. Refresh to try again.";
+      document.getElementById("saved-note").classList.remove("hidden");
+      entries = [];
+      return;
+    }
+    entries = res.data.map(function (r) {
+      return { date: r.day, meals: r.meals, note: r.note, symptoms: r.symptoms, example: false };
+    });
   }
-
   function dayKey(d) {
     var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
     return y + "-" + m + "-" + day;
   }
   function todayKey() { return dayKey(new Date()); }
 
-  var entries = load();
+  var entries = [];
   function byDate(list) {
     var map = {};
     list.forEach(function (e) { map[e.date] = e; });
@@ -411,7 +454,7 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     }
   }
 
-  document.getElementById("save-btn").addEventListener("click", function () {
+  document.getElementById("save-btn").addEventListener("click", async function () {
     var meals = document.getElementById("meals").value.trim();
     var note = document.getElementById("note").value.trim();
     var flag = document.getElementById("flag");
@@ -425,11 +468,22 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       flag.innerHTML = "";
     }
     var today = todayKey();
+    var symptoms = JSON.parse(JSON.stringify(symState));
+    var res = await sb.from("checkins").upsert(
+      { user_id: currentUser.id, day: today, meals: meals, note: note, symptoms: symptoms },
+      { onConflict: "user_id,day" }
+    );
+    if (res.error) {
+      var sn = document.getElementById("saved-note");
+      sn.textContent = "Could not save this check-in. Check your connection and try again.";
+      sn.classList.remove("hidden");
+      return;
+    }
     var rest = entries.filter(function (e) { return e.date !== today; });
-    rest.push({ date: today, meals: meals, note: note, symptoms: JSON.parse(JSON.stringify(symState)), example: false });
+    rest.push({ date: today, meals: meals, note: note, symptoms: symptoms, example: false });
     rest.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
     entries = rest;
-    save(entries);
+    document.getElementById("saved-note").textContent = "Saved. See you tomorrow.";
     renderStreak();
     document.getElementById("saved-note").classList.remove("hidden");
   });
@@ -463,16 +517,6 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     }
     document.getElementById("example-note").innerHTML = anyExample ?
       "Showing example data. Your own check-ins replace it as you add them. <button type='button' id='clear-ex' class='btn ghost' style='margin-top:8px'>Clear example data</button>" : "";
-    var clr = document.getElementById("clear-ex");
-    if (clr) clr.addEventListener("click", function () {
-      entries = entries.filter(function (e) { return !e.example; });
-      save(entries);
-      loadTodayIntoForm();
-      renderStreak();
-      renderTimeline();
-      renderPatterns();
-    });
-
     var list = document.getElementById("entries");
     var recent = entries.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 14);
     if (!recent.length) {
@@ -545,11 +589,62 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
     });
   }
 
-  // ---------- Init ----------
-  document.getElementById("region").addEventListener("change", applyRegion);
-  applyRegion();
-  loadTodayIntoForm();
-  renderStreak();
+  // ---------- Accounts ----------
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  function enterApp(user) {
+    currentUser = user;
+    document.body.removeAttribute("data-auth");
+    document.getElementById("account-email").textContent = user.email || "";
+    loadEntries().then(function () {
+      loadTodayIntoForm();
+      renderStreak();
+    });
+  }
+  function leaveApp() {
+    currentUser = null;
+    entries = [];
+    document.body.setAttribute("data-auth", "out");
+  }
+
+  sb.auth.onAuthStateChange(function (event, session) {
+    if (session && session.user) enterApp(session.user);
+    else leaveApp();
+  });
+
+  document.getElementById("btn-signin").addEventListener("click", async function () {
+    var email = val("auth-email"), pass = val("auth-pass");
+    if (!email || !pass) { authMsg("Enter your email and password.", true); return; }
+    var res = await sb.auth.signInWithPassword({ email: email, password: pass });
+    if (res.error) authMsg("Sign-in failed. Check your email and password. If you just signed up, confirm your email first.", true);
+  });
+
+  document.getElementById("btn-signup").addEventListener("click", async function () {
+    var email = val("auth-email"), pass = val("auth-pass");
+    if (!email || !pass) { authMsg("Enter your email and a password of at least 8 characters.", true); return; }
+    var res = await sb.auth.signUp({ email: email, password: pass });
+    if (res.error) authMsg(res.error.message, true);
+    else authMsg("Check your email for a confirmation link, then sign in here.", false);
+  });
+
+  document.getElementById("btn-signout").addEventListener("click", function () {
+    sb.auth.signOut();
+  });
+
+  document.getElementById("btn-delete").addEventListener("click", async function () {
+    if (!currentUser) return;
+    if (!window.confirm("Delete all your check-ins? This cannot be undone.")) return;
+    var res = await sb.from("checkins").delete().eq("user_id", currentUser.id);
+    if (res.error) {
+      document.getElementById("saved-note").textContent = "Could not delete your check-ins. Try again.";
+      document.getElementById("saved-note").classList.remove("hidden");
+      return;
+    }
+    entries = [];
+    loadTodayIntoForm();
+    renderStreak();
+  });
+
 })();
 </script>
 </body>
