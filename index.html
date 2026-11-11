@@ -147,6 +147,16 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       <p class="fine" style="margin-top:8px">Trigger Log tracks your own log and shows patterns in it. It does not diagnose or treat any condition.</p>
     </section>
 
+    <section class="card hidden" id="reset-card" aria-labelledby="reset-h">
+      <p class="eyebrow">Reset password</p>
+      <h2 id="reset-h">Choose a new password</h2>
+      <p class="muted">Use at least 8 characters. You'll stay signed in on this device.</p>
+      <label class="field" for="reset-pass">New password</label>
+      <input id="reset-pass" class="input" type="password" autocomplete="new-password">
+      <button class="btn" id="btn-reset-save" type="button" style="margin-top:16px">Save new password</button>
+      <p class="banner quiet hidden" id="reset-msg" role="status" style="margin-top:12px"></p>
+    </section>
+
     <section class="card hidden" id="auth-card">
       <p class="eyebrow">Guest mode</p>
       <h2>Keep your log safe</h2>
@@ -160,6 +170,7 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       <div style="display:grid;gap:8px;margin-top:16px">
         <button class="btn" id="btn-signin" type="button">Sign in</button>
         <button class="btn ghost" id="btn-signup" type="button">Create account</button>
+        <button class="btn" id="btn-forgot" type="button" style="background:transparent;color:var(--sage);font-weight:600">Forgot password?</button>
       </div>
       <p class="banner quiet hidden" id="auth-msg" role="status" style="margin-top:12px"></p>
     </section>
@@ -665,6 +676,12 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
   }
 
   sb.auth.onAuthStateChange(function (event, session) {
+    if (event === "PASSWORD_RECOVERY") {
+      document.getElementById("auth-card").classList.add("hidden");
+      document.getElementById("account-card").classList.add("hidden");
+      document.getElementById("reset-card").classList.remove("hidden");
+      return;
+    }
     if (session && session.user) enterApp(session.user);
     else leaveApp();
   });
@@ -690,6 +707,38 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       options: { redirectTo: window.location.origin + window.location.pathname }
     });
     if (res.error) authMsg("Google sign-in could not start. Try again, or use your email.", true);
+  });
+
+  document.getElementById("btn-forgot").addEventListener("click", async function () {
+    var email = val("auth-email");
+    if (!email) { authMsg("Enter your email first, then click Forgot password.", true); return; }
+    var res = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+    if (res.error) authMsg("Could not send a reset email. Try again in a few minutes.", true);
+    else authMsg("If an account exists for that email, a reset link is on its way. Check your inbox and spam folder.", false);
+  });
+
+  document.getElementById("btn-reset-save").addEventListener("click", async function () {
+    var pass = document.getElementById("reset-pass").value;
+    var msg = document.getElementById("reset-msg");
+    if (pass.length < 8) {
+      msg.textContent = "Use at least 8 characters.";
+      msg.style.borderColor = "var(--alert)";
+      msg.classList.remove("hidden");
+      return;
+    }
+    var res = await sb.auth.updateUser({ password: pass });
+    if (res.error) {
+      msg.textContent = "Could not save your new password. Request a new reset link and try again.";
+      msg.style.borderColor = "var(--alert)";
+      msg.classList.remove("hidden");
+      return;
+    }
+    document.getElementById("reset-card").classList.add("hidden");
+    document.getElementById("reset-pass").value = "";
+    if (res.data && res.data.user) enterApp(res.data.user);
+    authMsg("Your password is updated.", false);
   });
 
   document.getElementById("btn-signout").addEventListener("click", function () {
