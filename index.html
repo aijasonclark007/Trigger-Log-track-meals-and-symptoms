@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trigger Log: track meals and symptoms</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#F4F1EA">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Plan: "morning ledger". Warm paper, ink-green type, one amber accent for the
+   daily check-in. Serif headings give it a calm, personal feel; the amber
+   marks the single action to do today. */
+:root {
+  --paper: #F4F1EA;
+  --card: #FFFDF8;
+  --ink: #1F2D2A;
+  --muted: #5F6F6A;
+  --sage: #4F7A68;
+  --amber: #D9893B;
+  --amber-ink: #5A3212;
+  --alert: #A4442F;
+  --line: #E2DDD1;
+  --display: "Fraunces", Georgia, serif;
+  --body: "Figtree", system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15201E;
+    --card: #1D2B28;
+    --ink: #EEF2EE;
+    --muted: #A3B3AD;
+    --sage: #8DBBA6;
+    --amber: #F0A65A;
+    --amber-ink: #2B1A08;
+    --alert: #F08A70;
+    --line: #2F3F3B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15201E;
+  --card: #1D2B28;
+  --ink: #EEF2EE;
+  --muted: #A3B3AD;
+  --sage: #8DBBA6;
+  --amber: #F0A65A;
+  --amber-ink: #2B1A08;
+  --alert: #F08A70;
+  --line: #2F3F3B;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.app { max-width: 480px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; padding: 0 0 92px; }
+header.top { padding: 22px 20px 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+header.top h1 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+.demo-pill { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+main { padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+.card h2 { font-family: var(--display); font-weight: 600; font-size: 20px; margin: 0 0 6px; text-wrap: balance; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }
+.muted { color: var(--muted); font-size: 14px; }
+.banner { border-radius: 14px; padding: 12px 14px; font-size: 14px; background: color-mix(in srgb, var(--alert) 12%, var(--card)); border: 1px solid var(--alert); }
+.banner strong { color: var(--alert); }
+.banner.quiet { background: var(--card); border-color: var(--line); }
+.streak { display: flex; gap: 14px; align-items: center; }
+.ring { width: 64px; height: 64px; flex: 0 0 64px; }
+.ring text { font-family: var(--display); font-size: 18px; fill: var(--ink); }
+.btn { appearance: none; border: 0; border-radius: 14px; padding: 14px 18px; font-weight: 700; cursor: pointer; background: var(--amber); color: var(--amber-ink); width: 100%; text-align: center; text-decoration: none; display: block; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 600; }
+.btn:active { transform: translateY(1px); }
+label.field { display: block; font-weight: 600; font-size: 14px; margin: 14px 0 6px; }
+textarea { width: 100%; min-height: 84px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper); padding: 12px; resize: vertical; }
+.sym { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; margin-top: 10px; }
+.sym-row { display: flex; gap: 6px; }
+.dot { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper); cursor: pointer; font-weight: 600; }
+.dot[aria-pressed="true"] { background: var(--sage); border-color: var(--sage); color: #fff; }
+.done-note { color: var(--sage); font-weight: 600; }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cell { aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: var(--paper); }
+.cell.l1 { background: color-mix(in srgb, var(--sage) 25%, var(--paper)); }
+.cell.l2 { background: color-mix(in srgb, var(--sage) 55%, var(--paper)); color: #fff; }
+.cell.l3 { background: var(--sage); color: #fff; }
+.cell.empty { opacity: 0.5; }
+.entry { border-top: 1px solid var(--line); padding: 12px 0; }
+.entry:first-child { border-top: 0; padding-top: 0; }
+.entry .d { font-weight: 700; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.tag { font-size: 13px; border-radius: 999px; padding: 3px 10px; background: var(--paper); border: 1px solid var(--line); }
+.locked { position: relative; }
+.bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 10px 0 4px; }
+.bar > span { display: block; height: 100%; background: var(--sage); }
+.insight { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.insight:first-of-type { border-top: 0; }
+.fine { font-size: 12px; color: var(--muted); }
+nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
+nav.tabs ul { list-style: none; margin: 0 auto; padding: 0; max-width: 480px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+nav.tabs button { width: 100%; background: transparent; border: 0; padding: 8px 4px; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--muted); }
+nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(in srgb, var(--amber) 22%, transparent); }
+.hidden { display: none !important; }
+.region-select { font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; background: var(--card); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.foot { font-size: 12px; color: var(--muted); padding: 4px 4px 0; }
+.foot a { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Trigger Log</h1>
+    <span class="demo-pill">Prototype</span>
+    <label class="sr-only" for="region">Region</label>
+    <select id="region" class="region-select" aria-label="Region">
+      <option value="us">United States</option>
+      <option value="uk">United Kingdom</option>
+      <option value="eu">European Union</option>
+    </select>
+  </header>
+
+  <!-- TODAY -->
+  <main id="view-today">
+    <section class="card" aria-labelledby="streak-h">
+      <div class="streak">
+        <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="32" r="27" fill="none" stroke="var(--line)" stroke-width="7"/>
+          <circle id="ring-arc" cx="32" cy="32" r="27" fill="none" stroke="var(--sage)" stroke-width="7" stroke-linecap="round" transform="rotate(-90 32 32)" stroke-dasharray="0 170"/>
+          <text id="ring-text" x="32" y="37" text-anchor="middle">0</text>
+        </svg>
+        <div>
+          <p class="eyebrow">Your rhythm</p>
+          <h2 id="streak-h" style="margin:0">Day <span id="streak-days">0</span></h2>
+          <p class="muted" id="streak-msg">Log today to start your run.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="checkin-h">
+      <p class="eyebrow" id="today-label"></p>
+      <h2 id="checkin-h">Today's check-in</h2>
+      <p class="muted">Takes about 60 seconds. Note what you ate, then rate how you feel from 0 (none) to 5 (strong).</p>
+
+      <label class="field" for="meals">What did you eat today?</label>
+      <textarea id="meals" placeholder="e.g. porridge with banana, chicken wrap, a cup of green tea"></textarea>
+
+      <div id="sym-wrap"></div>
+
+      <label class="field" for="note">Anything else? (optional)</label>
+      <textarea id="note" placeholder="Stress, sleep, exercise, medication taken"></textarea>
+
+      <div id="flag" class="banner hidden" role="alert" style="margin-top:12px"></div>
+
+      <div style="margin-top:16px">
+        <button class="btn" id="save-btn" type="button">Save today's check-in</button>
+        <p class="done-note hidden" id="saved-note" role="status">Saved. See you tomorrow.</p>
+      </div>
+    </section>
+
+    <section class="card banner quiet" aria-label="Health information">
+      <strong style="color:var(--ink)">This tracks, it doesn't diagnose.</strong>
+      <p class="muted" style="margin:6px 0 0">Trigger Log shows patterns in what you log. It does not diagnose or treat any condition and does not replace advice from your doctor or another qualified health professional.</p>
+    </section>
+  </main>
+
+  <!-- TIMELINE -->
+  <main id="view-timeline" class="hidden">
+    <section class="card">
+      <p class="eyebrow">Last 14 days</p>
+      <h2>Your timeline</h2>
+      <p class="muted">Darker squares mean more symptoms logged that day.</p>
+      <div class="week" id="grid" style="margin-top:12px" aria-label="14-day overview"></div>
+      <p class="fine" style="margin-top:10px" id="example-note"></p>
+    </section>
+    <section class="card" id="entries"></section>
+  </main>
+
+  <!-- PATTERNS -->
+  <main id="view-patterns" class="hidden">
+    <section class="card" id="pattern-card"></section>
+    <section class="card">
+      <p class="eyebrow">Premium</p>
+      <h2>Export a report</h2>
+      <p class="muted">A one-page summary of your last 14 days to bring to a doctor or coach. (Prototype: the export is not yet built.)</p>
+      <button class="btn ghost" type="button" style="margin-top:12px" disabled>Coming soon</button>
+    </section>
+    <section class="card">
+      <p class="eyebrow">Get support</p>
+      <h2>Review with a coach</h2>
+      <p class="muted">Want help making sense of your log? Summit Health offers paid one-to-one nutrition coaching. This is a placeholder until the referral terms are agreed.</p>
+      <a class="btn ghost" style="margin-top:12px" href="https://www.summit-health.co.uk/" rel="noopener">Visit Summit Health (demo link)</a>
+      <p class="fine" style="margin-top:8px">Summit Health is a paid service and this app may receive a referral benefit if you book.</p>
+    </section>
+  </main>
+
+  <p class="foot" id="emergency-foot" style="padding:0 20px 8px"></p>
+</div>
+
+<nav class="tabs" aria-label="Main">
+  <ul>
+    <li><button type="button" data-tab="today" aria-current="page">Today</button></li>
+    <li><button type="button" data-tab="timeline">Timeline</button></li>
+    <li><button type="button" data-tab="patterns">Patterns</button></li>
+  </ul>
+</nav>
+
+<script>
+(function () {
+  "use strict";
+
+  var SYMPTOMS = [
+    { key: "bloating", label: "Bloating" },
+    { key: "stomach", label: "Stomach pain" },
+    { key: "energy", label: "Low energy" },
+    { key: "itch", label: "Itching or flushing" },
+    { key: "headache", label: "Headache" }
+  ];
+  var RED_FLAGS = [
+    "chest pain", "can't breathe", "cannot breathe", "trouble breathing",
+    "blood in", "black stool", "swelling of face", "throat closing",
+    "fainted", "passed out", "weight loss without"
+  ];
+  var STORE_KEY = "trigger-log-demo-v1";
+  var DAY_MS = 86400000;
+
+  // Clearly marked example data, so the screens look alive on first open.
+  function exampleData() {
+    var out = [];
+    var foods = [
+      "porridge with banana", "chicken wrap", "pasta with tomato", "salmon and rice",
+      "cheese toastie", "lentil soup", "eggs on toast", "rice and vegetables"
+    ];
+    for (var i = 13; i >= 1; i--) {
+      var d = dayKey(new Date(Date.now() - i * DAY_MS));
+      var food = foods[(13 - i) % foods.length];
+      var high = /cheese|pasta/.test(food);
+      out.push({
+        date: d,
+        meals: food,
+        note: "",
+        symptoms: {
+          bloating: high ? 4 : (i % 3 === 0 ? 2 : 1),
+          stomach: high ? 3 : 1,
+          energy: i % 4 === 0 ? 2 : 4,
+          itch: 1,
+          headache: i % 5 === 0 ? 3 : 0
+        },
+        example: true
+      });
+    }
+    return out;
+  }
+
+  var memory = null;
+  function load() {
+    try {
+      var raw = window.localStorage.getItem(STORE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* storage unavailable: fall back to memory */ }
+    if (memory) return memory;
+    memory = exampleData();
+    return memory;
+  }
+  function save(entries) {
+    memory = entries;
+    try { window.localStorage.setItem(STORE_KEY, JSON.stringify(entries)); } catch (e) { /* ignore */ }
+  }
+
+  function dayKey(d) {
+    var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+  function todayKey() { return dayKey(new Date()); }
+
+  var entries = load();
+  function byDate(list) {
+    var map = {};
+    list.forEach(function (e) { map[e.date] = e; });
+    return map;
+  }
+
+  // ---------- Tabs ----------
+  var tabs = document.querySelectorAll("nav.tabs button");
+  tabs.forEach(function (b) {
+    b.addEventListener("click", function () {
+      var name = b.getAttribute("data-tab");
+      tabs.forEach(function (x) { x.removeAttribute("aria-current"); });
+      b.setAttribute("aria-current", "page");
+      ["today", "timeline", "patterns"].forEach(function (v) {
+        document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
+      });
+      if (name === "timeline") renderTimeline();
+      if (name === "patterns") renderPatterns();
+      window.scrollTo(0, 0);
+    });
+  });
+
+  // ---------- Today ----------
+  document.getElementById("today-label").textContent = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+
+  var symState = {};
+  var symWrap = document.getElementById("sym-wrap");
+  SYMPTOMS.forEach(function (s) {
+    symState[s.key] = 0;
+    var row = document.createElement("div");
+    row.className = "sym";
+    var lab = document.createElement("span");
+    lab.id = "lab-" + s.key;
+    lab.textContent = s.label;
+    var group = document.createElement("div");
+    group.className = "sym-row";
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-labelledby", "lab-" + s.key);
+    for (var v = 0; v <= 5; v++) {
+      (function (val) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "dot";
+        btn.textContent = String(val);
+        btn.setAttribute("aria-label", s.label + " " + val + " out of 5");
+        btn.setAttribute("aria-pressed", val === 0 ? "true" : "false");
+        btn.addEventListener("click", function () {
+          symState[s.key] = val;
+          group.querySelectorAll(".dot").forEach(function (x) {
+            x.setAttribute("aria-pressed", x === btn ? "true" : "false");
+          });
+        });
+        group.appendChild(btn);
+      })(v);
+    }
+    row.appendChild(lab);
+    row.appendChild(group);
+    symWrap.appendChild(row);
+  });
+
+  function setSymptoms(values) {
+    SYMPTOMS.forEach(function (s, i) {
+      symState[s.key] = values[s.key] || 0;
+      var group = symWrap.querySelectorAll(".sym-row")[i];
+      group.querySelectorAll(".dot").forEach(function (x, val) {
+        x.setAttribute("aria-pressed", val === symState[s.key] ? "true" : "false");
+      });
+    });
+  }
+
+  function renderStreak() {
+    var map = byDate(entries);
+    var count = 0, skips = 0, d = new Date();
+    if (!map[todayKey()]) { d = new Date(Date.now() - DAY_MS); skips = 0; }
+    // Count back through consecutive check-in days. One missed day is forgiven.
+    for (var i = 0; i < 400; i++) {
+      var k = dayKey(d);
+      if (map[k]) { count++; skips = 0; }
+      else { skips++; if (skips > 1) break; }
+      d = new Date(d.getTime() - DAY_MS);
+    }
+    var goal = 14;
+    var pct = Math.min(count / goal, 1);
+    document.getElementById("streak-days").textContent = count;
+    document.getElementById("ring-text").textContent = count;
+    document.getElementById("ring-arc").setAttribute("stroke-dasharray", (pct * 170).toFixed(1) + " 170");
+    var msg;
+    var doneToday = !!map[todayKey()];
+    if (doneToday) {
+      msg = count >= goal ? "Pattern insights are unlocked. Nice work." :
+        (goal - count) + " more days until your first pattern report.";
+    } else {
+      msg = count === 0 ? "Log today to start your run." : "Check in today to keep your run going. One missed day is fine.";
+    }
+    document.getElementById("streak-msg").textContent = msg;
+    document.getElementById("saved-note").classList.toggle("hidden", !doneToday);
+    return count;
+  }
+
+  function loadTodayIntoForm() {
+    var today = byDate(entries)[todayKey()];
+    if (today) {
+      document.getElementById("meals").value = today.meals || "";
+      document.getElementById("note").value = today.note || "";
+      setSymptoms(today.symptoms || {});
+    }
+  }
+
+  document.getElementById("save-btn").addEventListener("click", function () {
+    var meals = document.getElementById("meals").value.trim();
+    var note = document.getElementById("note").value.trim();
+    var flag = document.getElementById("flag");
+    var text = (meals + " " + note).toLowerCase();
+    var hit = RED_FLAGS.some(function (f) { return text.indexOf(f) !== -1; });
+    if (hit) {
+      flag.classList.remove("hidden");
+      flag.innerHTML = "<strong>Please get help now.</strong> You mentioned something that can need urgent care. If you have chest pain, trouble breathing, or feel faint or unwell, call 999 now. For urgent advice call NHS 111, or contact your GP. This check-in is still saved.";
+    } else {
+      flag.classList.add("hidden");
+      flag.innerHTML = "";
+    }
+    var today = todayKey();
+    var rest = entries.filter(function (e) { return e.date !== today; });
+    rest.push({ date: today, meals: meals, note: note, symptoms: JSON.parse(JSON.stringify(symState)), example: false });
+    rest.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    entries = rest;
+    save(entries);
+    renderStreak();
+    document.getElementById("saved-note").classList.remove("hidden");
+  });
+
+  // ---------- Timeline ----------
+  function severityOf(e) {
+    if (!e || !e.symptoms) return 0;
+    var vals = Object.keys(e.symptoms).map(function (k) { return e.symptoms[k]; });
+    var total = vals.reduce(function (a, b) { return a + b; }, 0);
+    return total;
+  }
+  function renderTimeline() {
+    var map = byDate(entries);
+    var grid = document.getElementById("grid");
+    grid.innerHTML = "";
+    var anyExample = entries.some(function (e) { return e.example; });
+    for (var i = 13; i >= 0; i--) {
+      var d = new Date(Date.now() - i * DAY_MS);
+      var k = dayKey(d);
+      var e = map[k];
+      var cell = document.createElement("div");
+      cell.className = "cell";
+      var sev = severityOf(e);
+      if (!e) cell.classList.add("empty");
+      else if (sev >= 12) cell.classList.add("l3");
+      else if (sev >= 6) cell.classList.add("l2");
+      else cell.classList.add("l1");
+      cell.textContent = d.getDate();
+      cell.title = k + (e ? "" : ", no check-in");
+      grid.appendChild(cell);
+    }
+    document.getElementById("example-note").innerHTML = anyExample ?
+      "Showing example data. Your own check-ins replace it as you add them. <button type='button' id='clear-ex' class='btn ghost' style='margin-top:8px'>Clear example data</button>" : "";
+    var clr = document.getElementById("clear-ex");
+    if (clr) clr.addEventListener("click", function () {
+      entries = entries.filter(function (e) { return !e.example; });
+      save(entries);
+      loadTodayIntoForm();
+      renderStreak();
+      renderTimeline();
+      renderPatterns();
+    });
+
+    var list = document.getElementById("entries");
+    var recent = entries.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 14);
+    if (!recent.length) {
+      list.innerHTML = "<h2>No check-ins yet</h2><p class='muted'>Your check-ins will appear here.</p>";
+      return;
+    }
+    list.innerHTML = "<p class='eyebrow'>Recent entries</p>";
+    recent.forEach(function (e) {
+      var row = document.createElement("div");
+      row.className = "entry";
+      var tags = SYMPTOMS.filter(function (s) { return e.symptoms && e.symptoms[s.key] >= 3; })
+        .map(function (s) { return "<span class='tag'>" + s.label + " " + e.symptoms[s.key] + "/5</span>"; }).join("");
+      row.innerHTML = "<div class='d'></div><div class='muted'></div><div class='tags'>" + tags + "</div>";
+      row.querySelector(".d").textContent = new Date(e.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + (e.example ? " (example)" : "");
+      row.querySelector(".muted").textContent = e.meals || "No meals logged";
+      list.appendChild(row);
+    });
+  }
+
+  // ---------- Patterns ----------
+  function renderPatterns() {
+    var card = document.getElementById("pattern-card");
+    var count = renderStreak();
+    var goal = 14;
+    if (count < goal) {
+      card.innerHTML = "<p class='eyebrow'>Locked</p><h2>Patterns unlock at day 14</h2>" +
+        "<p class='muted'>Patterns need a few weeks of data to be meaningful. You're at day " + count + ".</p>" +
+        "<div class='bar' aria-hidden='true'><span style='width:" + Math.min(100, Math.round(count / goal * 100)) + "%'></span></div>" +
+        "<p class='fine'>Progress: " + count + " of " + goal + " days</p>";
+      return;
+    }
+    // Simple, descriptive check: which logged food words appear the day before
+    // high bloating? This shows associations in the log. It is not a diagnosis.
+    var map = byDate(entries);
+    var stats = {};
+    entries.forEach(function (e) {
+      var prev = new Date(new Date(e.date + "T12:00:00").getTime() - DAY_MS);
+      var pk = dayKey(prev);
+      var p = map[pk];
+      if (!p || !p.meals) return;
+      var high = e.symptoms && e.symptoms.bloating >= 3;
+      p.meals.toLowerCase().split(/[^a-z]+/).forEach(function (w) {
+        if (w.length < 4) return;
+        if (!stats[w]) stats[w] = { with: 0, total: 0 };
+        stats[w].total++;
+        if (high) stats[w].with++;
+      });
+    });
+    var rows = Object.keys(stats)
+      .filter(function (w) { return stats[w].total >= 3; })
+      .map(function (w) { return { word: w, n: stats[w].total, rate: stats[w].with / stats[w].total }; })
+      .sort(function (a, b) { return b.rate - a.rate; })
+      .slice(0, 4);
+    var html = "<p class='eyebrow'>Patterns</p><h2>What your log shows</h2>" +
+      "<p class='muted'>Foods you logged the day before higher bloating (3 or more out of 5). These are patterns in your notes, not proof of cause.</p>";
+    if (!rows.length) {
+      html += "<p class='muted' style='margin-top:12px'>Not enough repeated foods yet. Keep logging meals in the same words where you can.</p>";
+    } else {
+      rows.forEach(function (r) {
+        html += "<div class='insight'><span>" + escapeHtml(r.word) + "</span><span class='muted'>" +
+          Math.round(r.rate * 100) + "% of " + r.n + " days</span></div>";
+      });
+    }
+    html += "<p class='fine' style='margin-top:10px'>If symptoms are persistent or worrying, speak to your GP.</p>";
+    card.innerHTML = html;
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // ---------- Init ----------
+  loadTodayIntoForm();
+  renderStreak();
+})();
+</script>
+</body>
+</html>
