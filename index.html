@@ -606,18 +606,27 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       .filter(function (w) { return stats[w].total >= 3; })
       .map(function (w) { return { word: w, n: stats[w].total, rate: stats[w].with / stats[w].total }; })
       .sort(function (a, b) { return b.rate - a.rate; })
-      .slice(0, 4);
-    var html = "<p class='eyebrow'>Patterns</p><h2>What your log shows</h2>" +
-      "<p class='muted'>Foods you logged the day before higher bloating (3 or more out of 5). These are patterns in your notes, not proof of cause.</p>";
+      ;
+    var free = rows.slice(0, 2);
+    var more = rows.length - free.length;
+    var html = "<p class='eyebrow'>Free summary</p><h2>Your 14-day summary</h2>" +
+      "<p class='muted'>The foods you logged most often before higher bloating (3 or more out of 5). These are patterns in your notes, not proof of cause.</p>";
     if (!rows.length) {
       html += "<p class='muted' style='margin-top:12px'>Not enough repeated foods yet. Keep logging meals in the same words where you can.</p>";
     } else {
-      rows.forEach(function (r) {
+      free.forEach(function (r) {
         html += "<div class='insight'><span>" + escapeHtml(r.word) + "</span><span class='muted'>" +
           Math.round(r.rate * 100) + "% of " + r.n + " days</span></div>";
       });
     }
     html += "<p class='fine' style='margin-top:10px'>If symptoms are persistent or worrying, speak to your GP.</p>";
+    html += "<div style='margin-top:16px;padding-top:16px;border-top:1px solid var(--line)'>" +
+      "<p class='eyebrow'>Premium</p>" +
+      "<p class='muted'>See every food and symptom pattern in your log" +
+      (more > 0 ? " (" + more + " more found)" : "") +
+      ", longer trends, and a one-page report for your doctor or coach.</p>" +
+      "<button class='btn ghost' type='button' disabled>Premium coming soon</button>" +
+      "</div>";
     if (entries.some(function (e) { return e.example; })) {
       html += "<p class='fine' style='margin-top:10px'>Based on example data. Clear it on the Timeline tab to see only your own log.</p>";
     }
