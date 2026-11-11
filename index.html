@@ -147,11 +147,24 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       <p class="fine" style="margin-top:8px">Trigger Log tracks your own log and shows patterns in it. It does not diagnose or treat any condition.</p>
     </section>
 
+    <section class="card hidden" id="reset-card" aria-labelledby="reset-h">
+      <p class="eyebrow">Reset password</p>
+      <h2 id="reset-h">Choose a new password</h2>
+      <p class="muted">Use at least 8 characters. You'll stay signed in on this device.</p>
+      <label class="field" for="reset-pass">New password</label>
+      <input id="reset-pass" class="input" type="password" autocomplete="new-password">
+      <button class="btn" id="btn-reset-save" type="button" style="margin-top:16px">Save new password</button>
+      <p class="banner quiet hidden" id="reset-msg" role="status" style="margin-top:12px"></p>
+    </section>
+
     <section class="card hidden" id="auth-card">
       <p class="eyebrow">Guest mode</p>
       <h2>Keep your log safe</h2>
       <p class="muted">Your check-ins are stored only in this browser. Clearing browser data will delete them. Create an account or sign in to save them to your account and use them on another device. Any check-ins you've made here will move into your account.</p>
-      <button class="btn ghost" id="btn-google" type="button" style="margin-top:12px">Continue with Google</button>
+      <button class="btn ghost" id="btn-google" type="button" style="margin-top:12px;display:flex;align-items:center;justify-content:center;gap:10px;background:#FFFFFF;color:#1F1F1F;border-color:#DADCE0">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        <span>Continue with Google</span>
+      </button>
       <p class="fine" style="text-align:center;margin:12px 0 0">or use your email</p>
       <label class="field" for="auth-email">Email</label>
       <input id="auth-email" class="input" type="email" autocomplete="email">
@@ -160,6 +173,7 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       <div style="display:grid;gap:8px;margin-top:16px">
         <button class="btn" id="btn-signin" type="button">Sign in</button>
         <button class="btn ghost" id="btn-signup" type="button">Create account</button>
+        <button class="btn" id="btn-forgot" type="button" style="background:transparent;color:var(--sage);font-weight:600">Forgot password?</button>
       </div>
       <p class="banner quiet hidden" id="auth-msg" role="status" style="margin-top:12px"></p>
     </section>
@@ -606,18 +620,27 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       .filter(function (w) { return stats[w].total >= 3; })
       .map(function (w) { return { word: w, n: stats[w].total, rate: stats[w].with / stats[w].total }; })
       .sort(function (a, b) { return b.rate - a.rate; })
-      .slice(0, 4);
-    var html = "<p class='eyebrow'>Patterns</p><h2>What your log shows</h2>" +
-      "<p class='muted'>Foods you logged the day before higher bloating (3 or more out of 5). These are patterns in your notes, not proof of cause.</p>";
+      ;
+    var free = rows.slice(0, 2);
+    var more = rows.length - free.length;
+    var html = "<p class='eyebrow'>Free summary</p><h2>Your 14-day summary</h2>" +
+      "<p class='muted'>The foods you logged most often before higher bloating (3 or more out of 5). These are patterns in your notes, not proof of cause.</p>";
     if (!rows.length) {
       html += "<p class='muted' style='margin-top:12px'>Not enough repeated foods yet. Keep logging meals in the same words where you can.</p>";
     } else {
-      rows.forEach(function (r) {
+      free.forEach(function (r) {
         html += "<div class='insight'><span>" + escapeHtml(r.word) + "</span><span class='muted'>" +
           Math.round(r.rate * 100) + "% of " + r.n + " days</span></div>";
       });
     }
     html += "<p class='fine' style='margin-top:10px'>If symptoms are persistent or worrying, speak to your GP.</p>";
+    html += "<div style='margin-top:16px;padding-top:16px;border-top:1px solid var(--line)'>" +
+      "<p class='eyebrow'>Premium</p>" +
+      "<p class='muted'>See every food and symptom pattern in your log" +
+      (more > 0 ? " (" + more + " more found)" : "") +
+      ", longer trends, and a one-page report for your doctor or coach.</p>" +
+      "<button class='btn ghost' type='button' disabled>Premium coming soon</button>" +
+      "</div>";
     if (entries.some(function (e) { return e.example; })) {
       html += "<p class='fine' style='margin-top:10px'>Based on example data. Clear it on the Timeline tab to see only your own log.</p>";
     }
@@ -665,6 +688,12 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
   }
 
   sb.auth.onAuthStateChange(function (event, session) {
+    if (event === "PASSWORD_RECOVERY") {
+      document.getElementById("auth-card").classList.add("hidden");
+      document.getElementById("account-card").classList.add("hidden");
+      document.getElementById("reset-card").classList.remove("hidden");
+      return;
+    }
     if (session && session.user) enterApp(session.user);
     else leaveApp();
   });
@@ -690,6 +719,38 @@ nav.tabs button[aria-current="page"] { color: var(--ink); background: color-mix(
       options: { redirectTo: window.location.origin + window.location.pathname }
     });
     if (res.error) authMsg("Google sign-in could not start. Try again, or use your email.", true);
+  });
+
+  document.getElementById("btn-forgot").addEventListener("click", async function () {
+    var email = val("auth-email");
+    if (!email) { authMsg("Enter your email first, then click Forgot password.", true); return; }
+    var res = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+    if (res.error) authMsg("Could not send a reset email. Try again in a few minutes.", true);
+    else authMsg("If an account exists for that email, a reset link is on its way. Check your inbox and spam folder.", false);
+  });
+
+  document.getElementById("btn-reset-save").addEventListener("click", async function () {
+    var pass = document.getElementById("reset-pass").value;
+    var msg = document.getElementById("reset-msg");
+    if (pass.length < 8) {
+      msg.textContent = "Use at least 8 characters.";
+      msg.style.borderColor = "var(--alert)";
+      msg.classList.remove("hidden");
+      return;
+    }
+    var res = await sb.auth.updateUser({ password: pass });
+    if (res.error) {
+      msg.textContent = "Could not save your new password. Request a new reset link and try again.";
+      msg.style.borderColor = "var(--alert)";
+      msg.classList.remove("hidden");
+      return;
+    }
+    document.getElementById("reset-card").classList.add("hidden");
+    document.getElementById("reset-pass").value = "";
+    if (res.data && res.data.user) enterApp(res.data.user);
+    authMsg("Your password is updated.", false);
   });
 
   document.getElementById("btn-signout").addEventListener("click", function () {
